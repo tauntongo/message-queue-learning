@@ -8,8 +8,8 @@
   - 队列模型（消息被消费实质就是消息被从队列中移除，所以一份消息被消费一次后就不存在了）。其实可以引入consumer offset的概念，来为每种消费者维护一个偏移量去消费数据，而不是直接移除数据
   - 发布-订阅模型
   - 两种消息模型最大的区别在于**一份消息能不能被多次消费**
-  - <img src="image/queue-model.jpg" alt="queue-model" style="zoom:15%;" />
-  - <img src="image/publish-subscribe-model.jpg" alt="publish-subscribe-model" style="zoom:15%;" />
+  - <img src="images/queue-model.jpg" alt="queue-model" style="zoom:15%;" />
+  - <img src="images/publish-subscribe-model.jpg" alt="publish-subscribe-model" style="zoom:15%;" />
 - 几乎所有的消息队列产品都采用朴素的“请求-确认”（ACK）机制来保证消息不丢失。在生产者端，若生产者没有收到服务端的确认或失败响应，则会重发；在消费者端，若服务端没有收到消费者的消费确认，则会向消费者端重新推送这条消息
 
 ------
@@ -18,7 +18,7 @@
 
 ##### RabbitMQ的消息模型
 
-<img src="image/rabbitmq-exchange.jpg" alt="rabbitmq-exchange" style="zoom:15%;" />
+<img src="images/rabbitmq-exchange.jpg" alt="rabbitmq-exchange" style="zoom:15%;" />
 
 RabbitMQ使用的是**队列模型**，为了解决队列模型中**一份消息只能被消费一次**的问题，RabbitMQ中引入了Exchange的概念：生产者只负责将消息投递到Exchange，然后再根据Exchange上配置的策略来决定投递到哪些消费者
 
@@ -26,7 +26,7 @@ RabbitMQ使用的是**队列模型**，为了解决队列模型中**一份消息
 
 ##### RocketMQ的消息模型
 
-<img src="image/rocketmq-model.jpg" alt="rocketmq-model" style="zoom:15%;" />
+<img src="images/rocketmq-model.jpg" alt="rocketmq-model" style="zoom:15%;" />
 
 RocketMQ中有了主题（topic）后为什么还有队列（queue）的概念，队列在RocketMQ中发挥了什么作用？
 
@@ -79,7 +79,7 @@ RocketMQ中，在消费的时候，为了保证消息不丢失和消息的有序
   3. 执行本地事务，创建订单
   4. 根据本地事务执行结果来提交/回滚半消息
 
-- <img src="image/distribute-transaction-sample.jpg" alt="distribute-transaction-sample" style="zoom:15%;" />
+- <img src="images/distribute-transaction-sample.jpg" alt="distribute-transaction-sample" style="zoom:15%;" />
 - 考虑以上几步每一步可能出现异常的情况
   - 第一步出现异常则整体事务失败
   - 第三步失败则会滚本地事务并进入第四步回滚半消息
@@ -97,7 +97,7 @@ Producer会实现一个反查接口，如果Producer在提交/回滚半消息时
 
 **反查机制的实现并不依赖消息的发送方**，它查询的是数据库数据，也就是说即使发送消息的那台机器当机了，RocketMQ也可以反查其他Producer来获取本地事务的执行结果
 
-<img src="image/rocketmq-transaction-message.jpg" alt="rocketmq-transaction-message" style="zoom:15%;" />
+<img src="images/rocketmq-transaction-message.jpg" alt="rocketmq-transaction-message" style="zoom:15%;" />
 
 
 
@@ -113,3 +113,67 @@ Producer会实现一个反查接口，如果Producer在提交/回滚半消息时
 
 
 
+## 进阶篇
+
+### chapter-09 学习开源代码如何入手
+
+- 阅读源码的顺序
+  1. 阅读开源项目的灵魂（某篇学术期刊/论文），一般可以从官方文档中找到
+  2. 阅读官方文档（Quick Start，Introduction/Basic Concepts，Use case，EcoSystem），了解开源项目的一些关键概念（一般都是开发者自己发明的，e.g. Kafka Partition）及其应用场景
+  3. 提出问题（提不出问题怎么办？看官方文档，过程中思考，提出问题）
+  4. 带着问题去看官方文档（找一下官方是否有对应的实现文档，DESIGN，IMPLEMENTATION，Improvement Proposal（新功能拓展文档，非核心的更细节功能在此描述）），然后看源码，最后得到答案
+     - *不要直接从main方法开始学习源码，源码不是一个线性的存在*
+  5. 在带着问题看源码找到答案后，画出核心类图&时序图（or流程图）
+  6. 将原理细节用文字描述出来
+  7. 点成线
+  8. 线成网
+  9. 实际应用
+  10. 官方文档
+  11. 灵魂
+- 阅读源码的顺序总的来说是一个整体-细节-整体的过程
+- **带着问题去看源码，最好是带着问题的答案去看源码（这就需要先从官方文档找），思考知识点之间的关联，多写总结**
+
+### chapter-10 如何使用异步设计提高系统性能
+
+异步性能虽好，但不能滥用，**只有业务逻辑简单且需要超高吞吐量，或需要长时间等待资源的地方，才使用异步模型**
+
+以转账为例，涉及到三个系统：调用端 -> 转账服务 -> 资金账户服务，两次调用（process1，process2）
+
+- 如果采用同步调用，则整条调用流程都会处于等待中，直到最后一个节点-资金账户服务处理完成，才能终结掉整条处理流程
+- 如果采用**<u>异步调用，则每个节点都只需要在接受请求后将业务处理逻辑丢到下面的线程池去处理，然后直接返回就行</u>**，调用节点之间不再存在强依赖（不再等待上游业务逻辑执行完成），提高了整条链路的请求吞吐量。异步调用不仅提高了本节点的请求吞吐量而且因为其请求响应速度的提高，也带动了下游的吞吐量提升
+  - <img src="images/transfer-sync.jpg" alt="transfer-sync" style="zoom:15%;" />
+  - <img src="images/transfer-async.jpg" alt="transfer-async" style="zoom:15%;" />
+
+在设计异步模型时，有几个点需要注意：
+
+- 每台机器总的线程数量是有上限的
+- 并不是线程数越多越好，太多会造成频繁的cpu上下文切换反而拖低了性能，太少会造成cpu时间片工作不饱和。例如：我们有1台电脑，1个程序员，每天工作8小时，我们想提高电脑利用率，使用3个程序员三班倒，这时效率最高，如果直接使用1000个程序员，那么就会产生频繁的工作交接，每个程序员的利用率会变得很低
+- 要根据业务逻辑是cpu密集型还是I/O密集型来设置线程池的线程数，cpu密集型一般设置2*cpu核数线程数，保证cpu跑满，I/O密集型一般设置cpu核数个线程数，避免不必要的频繁cpu上下文切换
+
+
+
+异步调用的设计理念
+
+- **<u>异步回调机制的本质就是通过减少线程请求等待时间（空等待，不会占用时间片，所以长时间的等待会造成cpu都处于闲置状态，但新的请求就是进不来（因为线程被打满了））来提高cpu利用率</u>**
+  - 如A调用B，B接收请求耗时1s，处理业务逻辑耗时9s，整个过程耗时10s，假设机器的线程数上限是10000，某个时刻有10000个请求过来，若采用同步：那么在后续整整10s内只能一直处理接收的这10000个请求，其qps也就是1000/s；若采用异步回调：我们将请求处理线程池设为9999，业务逻辑处理线程池设为1，那么我们一秒能接收相应9999个请求，qps也就是9999/s
+- 具体做法是用少数线程响应业务请求，但处理时这些线程并不真正调用业务逻辑代码，而是简单的把业务处理逻辑扔到另一个专门执行业务逻辑代码的线程后就返回了，故不会有任何等待(CPU时间片浪费)。专门执行业务逻辑的线程可能会由于IO慢导致上下文切换而浪费一些CPU时间片，但这已经不影响业务请求的响应了，而业务逻辑执行完毕后会把回调处理逻辑再扔到专门执行回调业务逻辑的线程中，这时的执行业务逻辑线程的使命已完成，线程返回，然后会去找下一个需要执行的业务逻辑，这里也没有任何等待。回调业务处理线程也是同理
+- 以上与《摩登时代》里的卓别林很像，每个人只做自己的那点事(卓别林只拧螺丝)。有的线程只负责响应请求(放螺丝)，有的线程只负责执行业务逻辑(拧螺丝)，有的线程只负责执行回调代码(敲螺丝)，完成后就返回并继续执行下一个相同任务(拧完这个螺丝再找下一个需要拧的螺丝)，没有相互依赖的等待(放螺丝的不等螺丝拧好就直接放下一个螺丝)
+- 有利就有弊，分开后是不用等别人了，但想知道之前的步骤是否已经做好了就难了。比如螺丝没有拧紧就开始敲，会导致固定不住。如果发现螺丝没拧好，敲螺丝的人就要和工头说这块板要返工，螺丝取下，重新放，重新拧，之后才能敲
+- 个人感觉把关联性强且无需长时间等待的操作(如大量磁盘或网络IO)打包成同步，其他用异步，这样可以在规避CPU时间片浪费的同时兼顾了一致性，降低了补偿的频率和开销
+
+
+
+在Java中比较常用的异步框架
+
+- Java8中的[CompletableFuture](https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/CompletableFuture.html)（简单实用）
+- ReactiveX中的[RxJava](https://github.com/ReactiveX/RxJava)（功能强大更复杂）
+
+
+
+简单的说，**异步思想就是，当我们要执行一项比较耗时的操作时，不去等待操作结束，而是给这个操作一个命令：“当操作完成后，接下来去执行什么”**
+
+使用异步编程模型，虽然并不能加快程序本身的速度，但可以减少或者避免线程等待，**只用很少的线程就可以达到超高的吞吐能力**
+
+
+
+### chapter-11
