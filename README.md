@@ -1,3 +1,3 @@
 # Message Queue Learning
 
-reach me [read note](doc/message-queue-master.md) 
+reach me [read note](docs/message-queue-master.md) 
